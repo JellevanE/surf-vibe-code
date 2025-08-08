@@ -1,0 +1,28 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Surf Charts - North Sea</title>
+    <link rel="stylesheet" href="style.css">
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+</head>
+<body>
+    <main id="app-container">
+        <header id="map-header">
+            <h1>[[ SURF CHARTS - NORTH SEA ]]</h1>
+            <p>REAL-TIME WAVE DATA FOR THE DUTCH COAST</p>
+        </header>
+        <div id="map"></div>
+        <div id="map-legend">
+            <p>Wave Height (m): 
+                <span class="legend-box wave-low"></span> &lt;1m 
+                <span class="legend-box wave-mid"></span> 1-2m 
+                <span class="legend-box wave-high"></span> &gt;2m
+            </p>
+        </div>
+        <div id="error-display"></div>
+    </main>
+    <script src="script.js"></script>
+</body>
+</html>

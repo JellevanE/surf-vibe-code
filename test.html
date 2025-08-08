@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>API Test - Surf Charts</title>
+    <style>
+        body {
+            font-family: monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            border: 1px solid #3a3a3a;
+            background: #252526;
+        }
+        .error {
+            border-color: #ff6347;
+            background: #2d1a1a;
+        }
+        .success {
+            border-color: #4caf50;
+            background: #1a2d1a;
+        }
+        pre {
+            background: #2d2d30;
+            padding: 10px;
+            overflow: auto;
+            max-height: 200px;
+        }
+    </style>
+</head>
+<body>
+    <h1>API Test - Surf Charts Debug</h1>
+    <div id="status">Testing...</div>
+    
+    <script>
+        const statusDiv = document.getElementById('status');
+        
+        function addStatus(message, type = 'status') {
+            const div = document.createElement('div');
+            div.className = type;
+            div.innerHTML = message;
+            statusDiv.appendChild(div);
+        }
+        
+        async function testAPI() {
+            try {
+                addStatus('Testing GeoJSON load...');
+                const geoResponse = await fetch('./netherlands.geojson');
+                if (geoResponse.ok) {
+                    addStatus('✅ GeoJSON loaded successfully', 'success');
+                } else {
+                    addStatus(`❌ GeoJSON failed: ${geoResponse.status}`, 'error');
+                }
+                
+                addStatus('Testing Weather API...');
+                const latitudes = '53.06,52.86,52.52';
+                const longitudes = '4.78,4.69,4.6';
+                const apiUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${latitudes}&longitude=${longitudes}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction&timezone=auto`;
+                
+                const weatherResponse = await fetch(apiUrl);
+                const weatherData = await weatherResponse.json();
+                
+                if (Array.isArray(weatherData) && weatherData.length > 0) {
+                    addStatus(`✅ Weather API returned ${weatherData.length} locations`, 'success');
+                    addStatus(`Sample data: ${JSON.stringify({
+                        lat: weatherData[0].latitude,
+                        lon: weatherData[0].longitude,
+                        firstWaveHeight: weatherData[0].hourly?.swell_wave_height?.[0]
+                    }, null, 2)}`);
+                } else {
+                    addStatus(`❌ Weather API returned unexpected format`, 'error');
+                    addStatus(`<pre>${JSON.stringify(weatherData, null, 2)}</pre>`);
+                }
+                
+            } catch (error) {
+                addStatus(`❌ Test failed: ${error.message}`, 'error');
+                console.error('Test error:', error);
+            }
+        }
+        
+        testAPI();
+    </script>
+</body>
+</html>

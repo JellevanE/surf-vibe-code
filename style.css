@@ -1,0 +1,119 @@
+:root {
+    --bg-color: #1e1e1e;
+    --primary-text: #d4d4d4;
+    --secondary-text: #a0a0a0;
+    --container-bg: #252526;
+    --border-color: #3a3a3a;
+    --land-color: #4a5759;
+    --sea-color: #2f3e46;
+    --wave-low-color: #5a7d8b;
+    --wave-mid-color: #c9a253;
+    --wave-high-color: #b5654d;
+    --symbol-color: #e0e0e0;
+    --error-color: #ff6347;
+}
+
+body {
+    background-color: var(--bg-color);
+    color: var(--primary-text);
+    font-family: 'Courier New', Courier, monospace;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100vh;
+    margin: 0;
+}
+
+#app-container {
+    border: 1px solid var(--border-color);
+    padding: 20px;
+    text-align: center;
+    background-color: var(--container-bg);
+    max-width: 900px;
+}
+
+#map-header h1 {
+    font-size: 1.5em;
+    margin: 0;
+}
+
+#map-header p {
+    margin: 0 0 20px 0;
+    font-size: 0.9em;
+    color: var(--secondary-text);
+}
+
+#map {
+    display: grid;
+    border: 1px solid var(--border-color);
+}
+
+.map-cell {
+    background-color: var(--sea-color);
+    position: relative; /* For tooltip positioning */
+}
+
+.land {
+    background-color: var(--land-color);
+}
+
+.wave-marker {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    width: 100%;
+    height: 100%;
+}
+
+.wave-marker span {
+    color: var(--symbol-color);
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.wave-low { background-color: var(--wave-low-color); }
+.wave-mid { background-color: var(--wave-mid-color); }
+.wave-high { background-color: var(--wave-high-color); }
+
+#map-legend {
+    margin-top: 15px;
+    font-size: 0.8em;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 15px;
+}
+
+.legend-box {
+    display: inline-block;
+    width: 15px;
+    height: 15px;
+    border: 1px solid var(--border-color);
+}
+
+.tooltip {
+    position: absolute;
+    bottom: calc(100% + 5px); /* Position above the cell with a small gap */
+    left: 50%;
+    transform: translateX(-50%);
+    background-color: var(--bg-color);
+    border: 1px solid var(--primary-text);
+    padding: 8px;
+    font-size: 0.9em;
+    text-align: left;
+    white-space: nowrap;
+    z-index: 10;
+    pointer-events: none; /* Hide from mouse events */
+    opacity: 0;
+    transition: opacity 0.2s;
+    position: absolute;
+}
+
+.wave-marker:hover .tooltip {
+    opacity: 1;
+}
+
+#error-display {
+    color: var(--error-color);
+    margin-top: 15px;
+}
