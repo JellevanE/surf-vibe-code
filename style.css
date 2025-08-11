@@ -1,16 +1,13 @@
 :root {
-    --bg-color: #1e1e1e;
-    --primary-text: #d4d4d4;
-    --secondary-text: #a0a0a0;
-    --container-bg: #252526;
-    --border-color: #3a3a3a;
-    --land-color: #4a5759;
-    --sea-color: #2f3e46;
-    --wave-low-color: #5a7d8b;
-    --wave-mid-color: #c9a253;
-    --wave-high-color: #b5654d;
-    --symbol-color: #e0e0e0;
-    --error-color: #ff6347;
+    --bg-color: #0a0a23;
+    --primary-text: #00f5ff;
+    --secondary-text: #ff006e;
+    --container-bg: #1a0b3d;
+    --border-color: #ff4081;
+    --land-color: #2d1b69;
+    --sea-color: #0a0a23;
+    --symbol-color: #39ff14;
+    --error-color: #ff006e;
 }
 
 body {
@@ -63,12 +60,33 @@ body {
     align-items: center;
     width: 100%;
     height: 100%;
+    z-index: 5;
+    position: relative;
 }
 
 .wave-marker span {
-    color: var(--symbol-color);
-    font-size: 1.2em;
+    color: #39ff14;
+    font-size: 16px;
     font-weight: bold;
+    text-shadow: 0 0 10px #39ff14, 0 0 20px #39ff14;
+    background: rgba(255, 0, 110, 0.8);
+    border-radius: 50%;
+    width: 22px;
+    height: 22px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid #00f5ff;
+    box-shadow: 0 0 15px rgba(0, 245, 255, 0.6);
+}
+
+/* Special styling for coastal markers (on land cells) */
+.coastal-marker span {
+    background: rgba(255, 255, 0, 0.9);
+    border: 2px solid #39ff14;
+    box-shadow: 0 0 15px rgba(57, 255, 20, 0.8);
+    color: #0a0a23;
+    text-shadow: none;
 }
 
 .wave-low { background-color: var(--wave-low-color); }

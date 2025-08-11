@@ -24,43 +24,32 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Main Application Flow ---
     async function main() {
         try {
-            showError('Loading application...');
+            showStatus('Loading application...');
             
             const geoData = await fetchData('./netherlands.geojson');
-            console.log('GeoJSON data loaded successfully');
-            
             const projection = setupProjection(geoData);
-            console.log('Projection setup complete');
-            
             createMapGrid(projection, geoData);
-            console.log('Map grid created successfully');
             
-            showError('Loading weather data...');
+            showStatus('Loading weather data...');
             const allWeatherData = await fetchAllWeatherData(LOCATIONS);
-            console.log('Weather data fetched:', allWeatherData);
             
-            // Count valid data points
             const validDataCount = allWeatherData.filter(data => data !== null).length;
-            console.log(`Valid weather data for ${validDataCount}/${LOCATIONS.length} locations`);
+            console.log(`Loaded weather data for ${validDataCount}/${LOCATIONS.length} locations`);
             
             if (validDataCount === 0) {
-                showError('No weather data available for any locations.');
+                showError('No weather data available. Please try again later.');
                 return;
             }
             
-            showError('Rendering heatmap...');
+            showStatus('Rendering map...');
             renderHeatmap(LOCATIONS, allWeatherData, projection);
             
-            // Clear error message on success
-            setTimeout(() => {
-                showError('');
-            }, 1000);
-            
-            console.log('Application initialization complete');
+            // Clear status message on success
+            setTimeout(() => showStatus(''), 1000);
 
         } catch (error) {
             console.error('Application initialization failed:', error);
-            showError(`Application failed to load: ${error.message}`);
+            showError(`Failed to load: ${error.message}`);
         }
     }
 
@@ -89,9 +78,27 @@ document.addEventListener('DOMContentLoaded', () => {
                 const cell = document.createElement('div');
                 cell.classList.add('map-cell');
                 const [lon, lat] = projection.invert([c, r]);
-                if (d3.geoContains(geoData, [lon, lat])) {
+                
+                // Check if this point is inland (use a small buffer to avoid marking coastal areas as land)
+                const isInland = d3.geoContains(geoData, [lon, lat]);
+                
+                // For coastal classification, also check slightly offshore points
+                const offshorePoints = [
+                    [lon - 0.01, lat],     // West
+                    [lon + 0.01, lat],     // East  
+                    [lon, lat - 0.01],     // South
+                    [lon, lat + 0.01],     // North
+                ];
+                
+                const nearbyLandPoints = offshorePoints.filter(point => 
+                    d3.geoContains(geoData, point)
+                ).length;
+                
+                // Only mark as land if the point is inland AND most nearby points are also inland
+                if (isInland && nearbyLandPoints >= 3) {
                     cell.classList.add('land');
                 }
+                
                 map.appendChild(cell);
             }
         }
@@ -103,84 +110,73 @@ document.addEventListener('DOMContentLoaded', () => {
         const apiUrl = `https://marine-api.open-meteo.com/v1/marine?latitude=${latitudes}&longitude=${longitudes}&hourly=swell_wave_height,swell_wave_period,swell_wave_direction&timezone=auto`;
 
         try {
-            const responseArray = await fetchData(apiUrl); // This is an array of location objects
-            console.log('Raw API response array for all locations:', responseArray);
+            const responseArray = await fetchData(apiUrl);
             
-            // Check if the response is valid array
-            if (!Array.isArray(responseArray) || responseArray.length === 0) {
-                console.warn('Invalid API response structure:', responseArray);
+            if (!Array.isArray(responseArray)) {
+                console.warn('Expected array from API, got:', typeof responseArray);
                 return locations.map(() => null);
             }
             
-            // Process data for each location
             return responseArray.map((locationData, index) => {
-                try {
-                    if (!locationData || !locationData.hourly || !locationData.hourly.swell_wave_height) {
-                        console.warn(`No valid wave data for location ${index}:`, locationData);
-                        return null;
-                    }
-                    
-                    const processedData = processApiData(locationData);
-                    console.log(`Processed data for ${locations[index]?.name || 'location ' + index}:`, processedData);
-                    return processedData;
-                } catch (error) {
-                    console.error(`Error processing data for location ${index}:`, error);
+                if (!locationData?.hourly?.swell_wave_height) {
+                    console.warn(`No valid wave data for location ${index}`);
                     return null;
                 }
+                return processApiData(locationData);
             });
 
         } catch (error) {
-            console.error('Failed to fetch all weather data:', error);
-            showError('Could not load all weather data. See console for details.');
-            return locations.map(() => null); // Return array of nulls for failed fetches
+            console.error('Failed to fetch weather data:', error);
+            showError('Could not load weather data');
+            return locations.map(() => null);
         }
     }
 
+    function processApiData(locationData) {
+        const now = new Date();
+        let currentIndex = locationData.hourly.time.findIndex(t => new Date(t) > now);
+        if (currentIndex === -1) currentIndex = 0;
+
+        const safeGet = (arr, idx, def = 0) => {
+            if (!arr || idx >= arr.length || idx < 0) return def;
+            const val = arr[idx];
+            return (val != null && !isNaN(val)) ? val : def;
+        };
+
+        return {
+            current: {
+                swell: {
+                    height: safeGet(locationData.hourly.swell_wave_height, currentIndex, 0),
+                    period: safeGet(locationData.hourly.swell_wave_period, currentIndex, 0),
+                    direction: safeGet(locationData.hourly.swell_wave_direction, currentIndex, 0)
+                }
+            }
+        };
+    }
+
     function renderHeatmap(locations, allWeatherData, projection) {
-        console.log('Starting heatmap rendering...');
-        
-        // Filter out null entries from allWeatherData before processing
         const validWeatherData = allWeatherData.filter(data => data !== null);
         const validLocations = locations.filter((_, index) => allWeatherData[index] !== null);
 
-        console.log(`Rendering heatmap with ${validWeatherData.length} valid locations`);
-
-        if (validWeatherData.length === 0) {
-            console.warn('No valid weather data to render heatmap');
-            return;
-        }
+        if (validWeatherData.length === 0) return;
 
         const seaCells = Array.from(map.querySelectorAll('.map-cell:not(.land)'));
-        console.log(`Found ${seaCells.length} sea cells for heatmap`);
 
-        seaCells.forEach((cell, index) => {
+        seaCells.forEach(cell => {
             const [lon, lat] = projection.invert(getCellCoords(cell));
             const weightedHeight = getWeightedAverageHeight(lon, lat, validLocations, validWeatherData);
-            
             const color = getHeatmapColor(weightedHeight);
             cell.style.backgroundColor = color;
-            
-            // Debug first few cells
-            if (index < 5) {
-                console.log(`Cell ${index}: coords (${lon.toFixed(3)}, ${lat.toFixed(3)}), height ${weightedHeight.toFixed(3)}, color ${color}`);
-            }
         });
 
-        console.log('Heatmap rendering complete, starting marker rendering...');
-
-        // Clear any existing markers first
+        // Clear existing markers and render new ones
         map.querySelectorAll('.wave-marker').forEach(marker => marker.remove());
 
-        // Re-add markers on top of heatmap for valid data only
-        let markersRendered = 0;
         allWeatherData.forEach((weatherData, index) => {
             if (weatherData !== null) {
-                const success = renderWaveMarker(locations[index], weatherData, projection);
-                if (success) markersRendered++;
+                renderWaveMarker(locations[index], weatherData, projection);
             }
         });
-
-        console.log(`Rendered ${markersRendered} wave markers`);
     }
 
     function getCellCoords(cell) {
@@ -195,17 +191,16 @@ document.addEventListener('DOMContentLoaded', () => {
         let totalWeight = 0;
 
         allWeatherData.forEach((weatherData, i) => {
-            // Skip null or invalid weather data
-            if (!weatherData || !weatherData.current || !weatherData.current.swell) return;
+            if (!weatherData?.current?.swell) return;
             
             const swellHeight = weatherData.current.swell.height;
             if (typeof swellHeight !== 'number' || isNaN(swellHeight)) return;
 
             const loc = locations[i];
-            if (!loc || typeof loc.lon !== 'number' || typeof loc.lat !== 'number') return;
+            if (!loc) return;
 
             const dist = d3.geoDistance([lon, lat], [loc.lon, loc.lat]);
-            const weight = 1 / (dist * dist + 0.01); // Inverse square distance with small constant to avoid division by zero
+            const weight = 1 / (dist * dist + 0.01);
 
             totalHeight += swellHeight * weight;
             totalWeight += weight;
@@ -215,12 +210,18 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function getHeatmapColor(height) {
-        const h = Math.min(Math.max(height, 0), 2.5); // Clamp height
+        const h = Math.min(Math.max(height, 0), 1.5); // Keep the smaller scale for Dutch waves
+        
+        // Synthwave/cyberpunk color scheme - much more funky!
         const colors = {
-            0.0: '#2f3e46', // Sea color
-            0.5: '#5a7d8b', // Low
-            1.5: '#c9a253', // Mid
-            2.5: '#b5654d'  // High
+            0.0: '#0a0a23',  // Deep purple-black
+            0.2: '#1a0b3d',  // Dark purple
+            0.4: '#2d1b69',  // Electric purple  
+            0.6: '#ff006e',  // Hot pink/magenta
+            0.8: '#ff4081',  // Bright pink
+            1.0: '#00f5ff',  // Cyan
+            1.2: '#39ff14',  // Neon green
+            1.5: '#ffff00'   // Electric yellow
         };
         
         const stops = Object.keys(colors).map(parseFloat);
@@ -236,48 +237,41 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     function renderWaveMarker(location, weatherData, projection) {
-        // Check if weatherData is valid
-        if (!weatherData || !weatherData.current || !weatherData.current.swell) {
-            console.warn(`Invalid weather data for ${location.name}:`, weatherData);
-            return false;
-        }
+        if (!weatherData?.current?.swell) return;
 
         const [x, y] = projection([location.lon, location.lat]);
         
-        // Check if projection coordinates are valid
         if (isNaN(x) || isNaN(y) || x < 0 || y < 0 || x >= MAP_CONFIG.cols || y >= MAP_CONFIG.rows) {
-            console.warn(`Invalid projection coordinates for ${location.name}: (${x}, ${y})`);
-            return false;
+            console.warn(`${location.name} outside bounds: (${x.toFixed(1)}, ${y.toFixed(1)})`);
+            return;
         }
 
         const r = Math.floor(y);
         const c = Math.floor(x);
         const cellIndex = r * MAP_CONFIG.cols + c;
-        
-        // Check if cell index is valid
-        if (cellIndex < 0 || cellIndex >= map.children.length) {
-            console.warn(`Invalid cell index for ${location.name}: ${cellIndex}`);
-            return false;
-        }
-
         const cell = map.children[cellIndex];
 
-        console.log(`Rendering marker for ${location.name} (Lat: ${location.lat}, Lon: ${location.lon}):`);
-        console.log(`  Projected (x,y): (${x}, ${y})`);
-        console.log(`  Calculated (r,c): (${r}, ${c})`);
-        console.log(`  Cell Index: ${cellIndex}`);
-        console.log(`  Cell exists: ${!!cell}`);
-        if (cell) {
-            console.log(`  Cell is land: ${cell.classList.contains('land')}`);
+        if (!cell) {
+            console.warn(`${location.name} - no cell found`);
+            return;
         }
 
-        if (!cell || cell.classList.contains('land')) {
-            console.warn(`Cannot render marker for ${location.name}: cell is ${!cell ? 'null' : 'land'}`);
-            return false;
-        }
+        // For coastal surf spots, we'll place markers even if the cell is marked as "land"
+        // because surf spots are often right at the coastline
+        console.log(`${location.name} at (${r}, ${c}) - land: ${cell.classList.contains('land')}`);
+
+        // Clear any existing marker
+        const existingMarker = cell.querySelector('.wave-marker');
+        if (existingMarker) existingMarker.remove();
 
         const marker = document.createElement('div');
         marker.className = 'wave-marker';
+        
+        // If it's on land, make it slightly different to show it's a coastal marker
+        if (cell.classList.contains('land')) {
+            marker.classList.add('coastal-marker');
+        }
+        
         marker.innerHTML = `<span>${getWaveSymbol(weatherData.current.swell.direction)}</span>`;
         
         const tooltip = document.createElement('div');
@@ -287,31 +281,7 @@ document.addEventListener('DOMContentLoaded', () => {
         marker.appendChild(tooltip);
         cell.appendChild(marker);
         
-        console.log(`Successfully rendered marker for ${location.name}`);
-        return true;
-    }
-
-    function processApiData(locationData) {
-        console.log('Processing data for single location:', locationData);
-        const now = new Date();
-        let currentIndex = locationData.hourly.time.findIndex(t => new Date(t) > now);
-        if (currentIndex === -1) currentIndex = 0;
-
-        const safeGet = (arr, idx, def = 0) => {
-            if (!arr || !Array.isArray(arr) || idx >= arr.length || idx < 0) return def;
-            const val = arr[idx];
-            return (val != null && !isNaN(val)) ? val : def;
-        };
-
-        return {
-            current: {
-                swell: {
-                    height: safeGet(locationData.hourly.swell_wave_height, currentIndex, 0),
-                    period: safeGet(locationData.hourly.swell_wave_period, currentIndex, 0),
-                    direction: safeGet(locationData.hourly.swell_wave_direction, currentIndex, 0)
-                }
-            }
-        };
+        console.log(`✓ ${location.name} placed at (${r}, ${c})`);
     }
 
     function createTooltipHtml(locationName, data) {
@@ -330,24 +300,14 @@ document.addEventListener('DOMContentLoaded', () => {
         return symbols[Math.round(dir / 45) % 8];
     }
 
-    function getWaveHeightClass(h) {
-        if (h == null) return '';
-        if (h < 1) return 'wave-low';
-        if (h < 2) return 'wave-mid';
-        return 'wave-high';
-    }
-
-    function getSurfQuality(swellDir, windDir) {
-        if (swellDir == null || windDir == null) return 'N/A';
-        const diff = Math.abs(swellDir - windDir);
-        const angle = Math.min(diff, 360 - diff);
-        if (angle > 135) return 'Clean (Offshore)';
-        if (angle < 45) return 'Choppy (Onshore)';
-        return 'Cross-shore';
+    function showStatus(message) {
+        errorDisplay.textContent = message;
+        errorDisplay.style.color = '#a0a0a0';
     }
 
     function showError(message) {
         errorDisplay.textContent = message;
+        errorDisplay.style.color = '#ff6347';
     }
 
     main();
